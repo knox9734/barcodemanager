@@ -156,9 +156,9 @@ Licensed under the MIT License.
 
 ## 🙋‍♂️ Author
 
-**Developed by:** [Your Name]  
-📧 Email: your@email.com  
-🌐 Website: [yourwebsite.com](http://yourwebsite.com)
+**Developed by:** Kavindu Bandaranayake
+📧 Email: kavindubandaranayakemaho@gmail.com
+🌐 Website: None
 
 ---
 
