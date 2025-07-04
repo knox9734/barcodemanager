@@ -1,7 +1,7 @@
 # views.py
 from django.shortcuts import render, redirect, get_object_or_404
-from .models import Product
-from .forms import ProductForm, BulkProductForm,BarcodeGenerateForm
+from .models import Product,Inventory
+from .forms import ProductForm, BulkProductForm,BarcodeGenerateForm,StockUpdateForm
 from django.forms import formset_factory
 from django.contrib import messages
 import barcode
@@ -12,6 +12,7 @@ import random
 import os
 from django.conf import settings
 from PIL import Image, ImageDraw, ImageFont
+from django.db.models import Sum
 
 #pdf
 from reportlab.pdfgen import canvas
@@ -49,7 +50,8 @@ def add_product(request):
     if request.method == 'POST':
         form = ProductForm(request.POST)
         if form.is_valid():
-            form.save()
+            product=form.save()
+            Inventory.objects.get_or_create(product=product)
             return redirect('product_list')
     else:
         form = ProductForm()
@@ -133,6 +135,10 @@ def generate_barcodes(request, pk):
             #     filename = f'{product.name}_{i+1:03d}.png'
             #     filepath = os.path.join(product_folder, filename)
             #     combined_image.save(filepath, dpi=(203, 203))
+            label_width = 360     # width of each barcode label
+            label_height = 160    # height of label (includes barcode + text)
+            gap_between_labels = 0  # small gap between the two labels
+            combined_width = 2 * label_width - gap_between_labels  # total width for 2 labels
             for i in range(0, quantity, 2):
                 combined_image = Image.new('RGB', (combined_width, label_height), 'white')
 
@@ -146,41 +152,40 @@ def generate_barcodes(request, pk):
                     ean.write(buffer)
                     barcode_image = Image.open(buffer)
 
-                    # Create label area
+                    # Create label
                     label = Image.new('RGB', (label_width, label_height), 'white')
                     draw = ImageDraw.Draw(label)
 
-                    # Resize barcode to make room for product name under it
-                    barcode_resized = barcode_image.resize((label_width - 20, label_height - 40))  # leave 20–30px for text
+                    # Resize barcode to fit inside label
+                    barcode_resized = barcode_image.resize((label_width - 10, label_height - 20))
                     label.paste(barcode_resized, (10, 10))
 
-                    # Add product name centered under barcode
+                    # Center text
                     text = product.name
                     text_width = draw.textlength(text, font=product_font)
                     text_x = (label_width - text_width) // 2
-                    text_y = label_height - 24  # adjust as needed
+                    text_y = label_height - 24
 
                     draw.text((text_x, text_y), text, font=product_font, fill="black")
 
-                    # Paste into combined image
-                    x_offset = col * label_width
+                    # Paste label into combined image with reduced gap
+                    x_offset = col * (label_width - gap_between_labels)
                     combined_image.paste(label, (x_offset, 0))
 
-                # Save file
+                # Save combined image
                 filename = f'{product.name}_{i+1:03d}.png'
                 filepath = os.path.join(product_folder, filename)
                 combined_image.save(filepath, dpi=(203, 203))
-            # Generate PDF file from all barcode images
-            pdf_path = os.path.join(product_folder, f"{product.name}_labels.pdf")
 
-            # Get all generated PNGs
+            # Generate PDF from barcode images
+            pdf_path = os.path.join(product_folder, f"{product.name}_labels.pdf")
             barcode_files = sorted([
                 os.path.join(product_folder, f)
                 for f in os.listdir(product_folder)
                 if f.endswith(".png")
             ])
 
-            # Create PDF canvas (same size as 800x160 pixels = ~283x57 pt at 72 DPI)
+            # Create PDF: (800x160 px) = ~283 x 57 pt at 72 DPI
             c = canvas.Canvas(pdf_path, pagesize=landscape((283, 57)))
 
             for img_path in barcode_files:
@@ -188,15 +193,54 @@ def generate_barcodes(request, pk):
                 c.showPage()
 
             c.save()
+
             messages.success(request, f'{quantity} barcode label(s) generated.')
-            # return redirect('product_detail', pk=product.pk)
+
             pdf_url = f"{settings.MEDIA_URL}barcodes/{product.name}/{product.name}_labels.pdf"
             return render(request, 'products/product_detail.html', {
-                            'product': product,
-                            'pdf_url': pdf_url
-                        })
+                'product': product,
+                'pdf_url': pdf_url
+            })
 
     else:
         form = BarcodeGenerateForm()
 
     return render(request, 'products/generate_barcodes.html', {'form': form, 'product': product})
+
+def update_stock(request, pk):
+    inventory = get_object_or_404(Inventory, pk=pk)
+
+    if request.method == 'POST':
+        form = StockUpdateForm(request.POST, instance=inventory)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"Stock updated for {inventory.product.name}.")
+            return redirect('stock_dashboard')
+    else:
+        form = StockUpdateForm(instance=inventory)
+
+    return render(request, 'inventory/update_stock.html', {
+        'inventory': inventory,
+        'form': form,
+    })
+
+def stock_dashboard(request):
+    search_query = request.GET.get('search', '').strip()
+    category_filter = request.GET.get('category', '')
+
+    inventory_list = Inventory.objects.select_related('product')
+
+    if search_query:
+        inventory_list = inventory_list.filter(product__name__icontains=search_query)
+    if category_filter:
+        inventory_list = inventory_list.filter(product__category=category_filter)
+
+    categories = Product.objects.values_list('category', flat=True).distinct()
+    total_stock = inventory_list.aggregate(total=Sum('stock_quantity'))['total']
+
+    return render(request, 'inventory/stock_dashboard.html', {
+        'inventory_list': inventory_list,
+        'categories': categories,
+        'total_stock': total_stock,
+    })
+

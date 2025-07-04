@@ -49,3 +49,11 @@ class Product(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.barcode_number})"
+    
+class Inventory(models.Model):
+    product = models.OneToOneField(Product, on_delete=models.CASCADE)
+    stock_quantity = models.PositiveIntegerField(default=0)
+    last_updated = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.product.name} - {self.stock_quantity} kg"
