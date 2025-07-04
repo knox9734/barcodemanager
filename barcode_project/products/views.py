@@ -24,6 +24,10 @@ font = ImageFont.truetype(fontpath, 24)
 font_bold = ImageFont.truetype(fontpath, 26)
 font_english = ImageFont.truetype("arial.ttf", 24)
 
+# Constants for 50mm x 20mm label at 203 DPI
+label_width = 400
+label_height = 160
+combined_width = label_width * 2
 
 
 def home(request):
@@ -86,37 +90,41 @@ def generate_barcodes(request, pk):
             product_folder = os.path.join(settings.MEDIA_ROOT, 'barcodes', f'{product.name}')
             os.makedirs(product_folder, exist_ok=True)
 
-            for i in range(quantity):
-                barcode_number = product.generate_unique_ean13()
-                ean = barcode.get('ean13', barcode_number, writer=ImageWriter())
-                buffer = BytesIO()
-                ean.write(buffer)
-                barcode_image = Image.open(buffer)
+            for i in range(0, quantity, 2):
+                combined_image = Image.new('RGB', (combined_width, label_height), 'white')
 
-                # Create a label (400x300) white background
-                label = Image.new('RGB', (400, 300), 'white')
-                draw = ImageDraw.Draw(label)
+                for col in range(2):
+                    if i + col >= quantity:
+                        break  # Skip if odd count
 
+                    barcode_number = product.generate_unique_ean13()
+                    ean = barcode.get('ean13', barcode_number, writer=ImageWriter())
+                    buffer = BytesIO()
+                    ean.write(buffer)
+                    barcode_image = Image.open(buffer)
 
-                # draw.text((10, 10), "කපුකොටුව සහල්", font=font_bold, fill="black")
-                # draw.text((10, 40), product.name, font=font_bold, fill="black")
-                # draw.text((10, 80), f"Price: {product.price}", font=font, fill="black")
-                # draw.text((10, 110), f"MFD: {product.manufacture_date}", font=font, fill="black")
-                # draw.text((10, 140), f"EXP: {product.expiry_date}", font=font, fill="black")
-                draw.text((10, 10), "lmqfldgqj iy,a", font=font_bold, fill="black")
-                draw.text((10, 40), f" {product.name}", font=font_english, fill="black")
-                draw.text((10, 80), f"ñ, • re ¡ {product.price}", font=font, fill="black")
-                draw.text((10, 110), f"ksIamdÈ; Èkh {product.manufacture_date.strftime('%Y-%m-%d')}", font=font, fill="black")
-                draw.text((10, 140), f"l,a bl=;ajk Èkh  {product.expiry_date.strftime('%Y-%m-%d')}", font=font, fill="black")
+                    # Create single label area
+                    label = Image.new('RGB', (label_width, label_height), 'white')
+                    draw = ImageDraw.Draw(label)
 
+                    # Draw text (adjust Y if needed to fit)
+                    draw.text((10, 10), "lmqfldgqj iy,a", font=font_bold, fill="black")
+                    draw.text((10, 30), f"{product.name}", font=font_english, fill="black")
+                    draw.text((10, 50), f"ñ, • re ¡ {product.price}", font=font, fill="black")
+                    
 
-                # Paste the barcode image
-                label.paste(barcode_image.resize((360, 96)), (50, 180))
+                    # Resize barcode to fit
+                    barcode_resized = barcode_image.resize((360, 60))
+                    label.paste(barcode_resized, (20, label_height - 65))
 
+                    # Paste left (col=0) or right (col=1)
+                    x_offset = col * label_width
+                    combined_image.paste(label, (x_offset, 0))
 
-                filename = f'{barcode_number}_{i+1}.png'
+                # Save combined label row (2 labels in one image)
+                filename = f'{product.name}_{i+1:03d}.png'
                 filepath = os.path.join(product_folder, filename)
-                label.save(filepath)
+                combined_image.save(filepath, dpi=(203, 203))
 
             messages.success(request, f'{quantity} barcode label(s) generated.')
             return redirect('product_detail', pk=product.pk)
