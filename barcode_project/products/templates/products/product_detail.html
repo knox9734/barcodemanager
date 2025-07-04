@@ -27,13 +27,20 @@
             </a>
         </div>
 
-        {% if pdf_url %}
-  <div class="mt-4">
+        <!-- {% if pdf_url %} -->
+  <!-- <div class="mt-4">
     <a href="{{ pdf_url }}" target="_blank" class="text-blue-600 font-semibold hover:underline">
       📄 Download Barcode PDF
     </a>
   </div>
+{% endif %} -->
+{% if pdf_url %}
+<a href="{{ pdf_url }}" download class="text-blue-600 font-semibold hover:underline">
+  📄 Download Barcode PDF
+</a>
 {% endif %}
+
+
 
 
 
