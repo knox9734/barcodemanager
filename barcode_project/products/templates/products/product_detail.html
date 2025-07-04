@@ -27,12 +27,16 @@
             </a>
         </div>
 
-        {% if product.barcode_image %}
-            <div class="text-center mt-6">
-                <p class="text-sm text-gray-500 mb-2">Generated Barcode Image:</p>
-                <img src="{{ product.barcode_image.url }}" alt="Barcode Image" class="mx-auto max-w-xs">
-            </div>
-        {% endif %}
+        {% if pdf_url %}
+  <div class="mt-4">
+    <a href="{{ pdf_url }}" target="_blank" class="text-blue-600 font-semibold hover:underline">
+      📄 Download Barcode PDF
+    </a>
+  </div>
+{% endif %}
+
+
+
     </div>
 
 </body>

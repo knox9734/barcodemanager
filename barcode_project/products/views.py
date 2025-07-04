@@ -13,6 +13,13 @@ import os
 from django.conf import settings
 from PIL import Image, ImageDraw, ImageFont
 
+#pdf
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import landscape
+from reportlab.lib.utils import ImageReader
+import io
+
+
 img = Image.new('RGB', (400, 200), color='white')
 draw = ImageDraw.Draw(img)
 
@@ -163,9 +170,31 @@ def generate_barcodes(request, pk):
                 filename = f'{product.name}_{i+1:03d}.png'
                 filepath = os.path.join(product_folder, filename)
                 combined_image.save(filepath, dpi=(203, 203))
+            # Generate PDF file from all barcode images
+            pdf_path = os.path.join(product_folder, f"{product.name}_labels.pdf")
 
+            # Get all generated PNGs
+            barcode_files = sorted([
+                os.path.join(product_folder, f)
+                for f in os.listdir(product_folder)
+                if f.endswith(".png")
+            ])
+
+            # Create PDF canvas (same size as 800x160 pixels = ~283x57 pt at 72 DPI)
+            c = canvas.Canvas(pdf_path, pagesize=landscape((283, 57)))
+
+            for img_path in barcode_files:
+                c.drawImage(ImageReader(img_path), 0, 0, width=283, height=57)
+                c.showPage()
+
+            c.save()
             messages.success(request, f'{quantity} barcode label(s) generated.')
-            return redirect('product_detail', pk=product.pk)
+            # return redirect('product_detail', pk=product.pk)
+            pdf_url = f"{settings.MEDIA_URL}barcodes/{product.name}/{product.name}_labels.pdf"
+            return render(request, 'products/product_detail.html', {
+                            'product': product,
+                            'pdf_url': pdf_url
+                        })
 
     else:
         form = BarcodeGenerateForm()
