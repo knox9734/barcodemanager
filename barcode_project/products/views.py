@@ -23,6 +23,7 @@ fontpath = os.path.join(font_folder, fontname)
 font = ImageFont.truetype(fontpath, 24)
 font_bold = ImageFont.truetype(fontpath, 26)
 font_english = ImageFont.truetype("arial.ttf", 24)
+product_font = ImageFont.truetype("arial.ttf", 18)
 
 # Constants for 50mm x 20mm label at 203 DPI
 label_width = 400
@@ -89,13 +90,48 @@ def generate_barcodes(request, pk):
 
             product_folder = os.path.join(settings.MEDIA_ROOT, 'barcodes', f'{product.name}')
             os.makedirs(product_folder, exist_ok=True)
+            #generate with text
+            # for i in range(0, quantity, 2):
+            #     combined_image = Image.new('RGB', (combined_width, label_height), 'white')
 
+            #     for col in range(2):
+            #         if i + col >= quantity:
+            #             break  # Skip if odd count
+
+            #         barcode_number = product.generate_unique_ean13()
+            #         ean = barcode.get('ean13', barcode_number, writer=ImageWriter())
+            #         buffer = BytesIO()
+            #         ean.write(buffer)
+            #         barcode_image = Image.open(buffer)
+
+            #         # Create single label area
+            #         label = Image.new('RGB', (label_width, label_height), 'white')
+            #         draw = ImageDraw.Draw(label)
+
+            #         # Draw text (adjust Y if needed to fit)
+            #         draw.text((5, 5), "lmqfldgqj iy,a", font=font_bold, fill="black")
+            #         draw.text((10, 30), f"{product.name}", font=font_english, fill="black")
+            #         draw.text((10, 50), f"ñ, • re ¡ {product.price}", font=font, fill="black")
+                    
+
+            #         # Resize barcode to fit
+            #         barcode_resized = barcode_image.resize((360, 60))
+            #         label.paste(barcode_resized, (20, label_height - 65))
+
+            #         # Paste left (col=0) or right (col=1)
+            #         x_offset = col * label_width
+            #         combined_image.paste(label, (x_offset, 0))
+
+            #     # Save combined label row (2 labels in one image)
+            #     filename = f'{product.name}_{i+1:03d}.png'
+            #     filepath = os.path.join(product_folder, filename)
+            #     combined_image.save(filepath, dpi=(203, 203))
             for i in range(0, quantity, 2):
                 combined_image = Image.new('RGB', (combined_width, label_height), 'white')
 
                 for col in range(2):
                     if i + col >= quantity:
-                        break  # Skip if odd count
+                        break
 
                     barcode_number = product.generate_unique_ean13()
                     ean = barcode.get('ean13', barcode_number, writer=ImageWriter())
@@ -103,25 +139,27 @@ def generate_barcodes(request, pk):
                     ean.write(buffer)
                     barcode_image = Image.open(buffer)
 
-                    # Create single label area
+                    # Create label area
                     label = Image.new('RGB', (label_width, label_height), 'white')
                     draw = ImageDraw.Draw(label)
 
-                    # Draw text (adjust Y if needed to fit)
-                    draw.text((10, 10), "lmqfldgqj iy,a", font=font_bold, fill="black")
-                    draw.text((10, 30), f"{product.name}", font=font_english, fill="black")
-                    draw.text((10, 50), f"ñ, • re ¡ {product.price}", font=font, fill="black")
-                    
+                    # Resize barcode to make room for product name under it
+                    barcode_resized = barcode_image.resize((label_width - 20, label_height - 40))  # leave 20–30px for text
+                    label.paste(barcode_resized, (10, 10))
 
-                    # Resize barcode to fit
-                    barcode_resized = barcode_image.resize((360, 60))
-                    label.paste(barcode_resized, (20, label_height - 65))
+                    # Add product name centered under barcode
+                    text = product.name
+                    text_width = draw.textlength(text, font=product_font)
+                    text_x = (label_width - text_width) // 2
+                    text_y = label_height - 24  # adjust as needed
 
-                    # Paste left (col=0) or right (col=1)
+                    draw.text((text_x, text_y), text, font=product_font, fill="black")
+
+                    # Paste into combined image
                     x_offset = col * label_width
                     combined_image.paste(label, (x_offset, 0))
 
-                # Save combined label row (2 labels in one image)
+                # Save file
                 filename = f'{product.name}_{i+1:03d}.png'
                 filepath = os.path.join(product_folder, filename)
                 combined_image.save(filepath, dpi=(203, 203))
